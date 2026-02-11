@@ -1,0 +1,5 @@
+{
+  "name": "SecurePage Portal Generator",
+  "description": "A secure, shareable HTML portal generator with integrated Gemini AI for content creation, image generation, and code optimization.",
+  "requestFramePermissions": []
+}
