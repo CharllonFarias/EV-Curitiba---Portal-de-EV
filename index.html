@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SecurePage Portal</title>
+    <script>
+      // Silenciar o aviso do Tailwind CDN para não poluir o console em produção
+      const originalWarn = console.warn;
+      console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+        originalWarn.apply(console, args);
+      };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -16,7 +24,6 @@
     </style>
     <script>
       // CONFIGURAÇÃO DA API KEY (Obrigatório para Netlify/Deploy)
-      // IMPORTANTE: Usamos '||' para não apagar variáveis de ambiente existentes do navegador/bundler
       window.process = window.process || {};
       window.process.env = window.process.env || {};
       
@@ -37,5 +44,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- Script principal para carregar o React App -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
