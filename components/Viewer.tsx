@@ -68,12 +68,11 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
 
   const goHome = () => {
       window.location.hash = '';
-      // Removing reload to make navigation smoother, state update in App.tsx handles view change
   }
 
   if (loading) {
      return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-slate-950 p-4">
             <div className="text-white flex flex-col items-center gap-4">
                 <svg className="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -87,7 +86,7 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 p-4">
         <div className="bg-slate-900 p-8 rounded-xl shadow-2xl border border-red-900 text-center max-w-md w-full relative">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
@@ -100,7 +99,7 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 p-4">
         <div className="bg-slate-900 p-8 rounded-xl shadow-2xl border border-slate-800 max-w-md w-full">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-white">Secure Portal</h1>
@@ -137,20 +136,20 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="fixed inset-0 bg-white">
         {/* Simple floating home button for viewer context */}
-        <div className="absolute bottom-4 right-4 z-50 opacity-20 hover:opacity-100 transition-opacity">
-            <Button onClick={goHome} variant="secondary" className="text-xs py-1 px-2">Create New</Button>
+        <div className="absolute bottom-4 right-4 z-50 opacity-20 hover:opacity-100 transition-opacity pointer-events-auto">
+            <Button onClick={goHome} variant="secondary" className="text-xs py-1 px-2 shadow-sm">Create New</Button>
         </div>
 
       {/* 
-         Sandbox updated to allow same-origin to prevent CORS/Null origin errors when 
-         hosted on platforms like Netlify/Vercel.
+         Sandbox configured to allow same-origin to prevent CORS issues on hosting.
+         We use h-full and fixed inset-0 on parent to ensure full viewport usage.
       */}
       <iframe
         title="Secure Content"
         srcDoc={data?.htmlContent}
-        className="w-full h-screen border-none"
+        className="w-full h-full border-none block"
         sandbox="allow-scripts allow-popups allow-forms allow-same-origin allow-modals"
       />
     </div>

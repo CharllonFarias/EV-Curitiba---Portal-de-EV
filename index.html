@@ -16,13 +16,12 @@
     </style>
     <script>
       // CONFIGURAÇÃO DA API KEY (Obrigatório para Netlify/Deploy)
-      window.process = {
-        env: {
-          // ⚠️ COLE SUA CHAVE GEMINI ABAIXO DENTRO DAS ASPAS
-          // Exemplo: API_KEY: "AIzaSyB..."
-          API_KEY: "AIzaSyDdcLT6a1juu7TMnDi3DgE2aACrvNF7eXE" 
-        }
-      };
+      // IMPORTANTE: Usamos '||' para não apagar variáveis de ambiente existentes do navegador/bundler
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      
+      // ⚠️ COLE SUA CHAVE GEMINI ABAIXO DENTRO DAS ASPAS
+      window.process.env.API_KEY = "AIzaSyDdcLT6a1juu7TMnDi3DgE2aACrvNF7eXE";
     </script>
   <script type="importmap">
 {
