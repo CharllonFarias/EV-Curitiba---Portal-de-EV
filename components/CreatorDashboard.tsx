@@ -3,21 +3,43 @@ import { EXPIRATION_OPTIONS, MOCK_HTML_TEMPLATE } from '../constants';
 import { AIAssistant } from './AIAssistant';
 import { Button } from './Button';
 import { supabase } from '../services/supabaseClient';
+import { analyzeBrand, generatePortalHtml } from '../services/geminiService';
+import { BrandData, PortalSection } from '../types';
 
 interface CreatorDashboardProps {
   editingId?: string | null;
 }
 
+const DEFAULT_SECTIONS: PortalSection[] = [
+  { id: 'intro', title: 'Introduction', description: 'Overview of the client and the project context.', isRemovable: true },
+  { id: 'stakeholders', title: 'Stakeholder Mapping', description: 'Key people, their roles, and influence.', isRemovable: true },
+  { id: 'sectors', title: 'Departments/Sectors', description: 'Organizational structure and key departments involved.', isRemovable: true },
+  { id: 'pain-points', title: 'Pain Points', description: 'Key challenges and problems identified in the discovery.', isRemovable: true },
+];
+
 export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId }) => {
+  // Basic Info
   const [clientName, setClientName] = useState('');
   const [password, setPassword] = useState('');
   const [expiration, setExpiration] = useState(EXPIRATION_OPTIONS[0].value);
-  const [htmlContent, setHtmlContent] = useState(MOCK_HTML_TEMPLATE);
+  
+  // New Inputs
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [contextText, setContextText] = useState('');
+  const [sections, setSections] = useState<PortalSection[]>(DEFAULT_SECTIONS);
+  const [brandData, setBrandData] = useState<BrandData | null>(null);
+  
+  // Editor State
+  const [htmlContent, setHtmlContent] = useState(MOCK_HTML_TEMPLATE); // Start with mock, replace with generated
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  
+  // UI State
   const [showAI, setShowAI] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Load data if editing
   useEffect(() => {
@@ -34,12 +56,64 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
           setClientName(data.client_name);
           setPassword(data.password);
           setHtmlContent(data.html_content);
+          
+          // Restore new fields if they exist
+          if (data.website_url) setWebsiteUrl(data.website_url);
+          if (data.context_text) setContextText(data.context_text);
+          if (data.sections) setSections(data.sections);
+          if (data.brand_data) setBrandData(data.brand_data);
         }
         setIsLoadingData(false);
       };
       loadPortal();
     }
   }, [editingId]);
+
+  const handleAnalyzeWebsite = async () => {
+    if (!websiteUrl) return alert("Please enter a website URL.");
+    setIsAnalyzing(true);
+    try {
+      const data = await analyzeBrand(websiteUrl);
+      setBrandData(data);
+    } catch (e) {
+      alert("Failed to analyze website. Please try again.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleGeneratePortal = async () => {
+    if (!clientName) return alert("Please enter a Client Name.");
+    if (!brandData) return alert("Please analyze the website first to get brand guidelines.");
+    if (!contextText) return alert("Please provide some context/transcription.");
+
+    setIsGenerating(true);
+    try {
+      const html = await generatePortalHtml(clientName, brandData, contextText, sections);
+      setHtmlContent(html);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to generate portal. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleAddSection = () => {
+    const title = prompt("Enter section title:");
+    if (title) {
+      setSections([...sections, {
+        id: Date.now().toString(),
+        title,
+        description: 'Custom section added by user.',
+        isRemovable: true
+      }]);
+    }
+  };
+
+  const handleRemoveSection = (id: string) => {
+    setSections(sections.filter(s => s.id !== id));
+  };
 
   const handleSave = async () => {
     if (!clientName || !password) {
@@ -54,14 +128,16 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
         client_name: clientName,
         html_content: htmlContent,
         password: password,
-        // If editing, we update the expiration relative to NOW, essentially extending or resetting it
-        expires_at: Date.now() + expiration, 
+        expires_at: Date.now() + expiration,
+        website_url: websiteUrl,
+        context_text: contextText,
+        sections: sections,
+        brand_data: brandData
       };
 
       let result;
 
       if (editingId) {
-        // Update existing
         result = await supabase
           .from('portals')
           .update(payload)
@@ -69,7 +145,6 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
           .select('id')
           .single();
       } else {
-        // Create new
         result = await supabase
           .from('portals')
           .insert(payload)
@@ -79,12 +154,9 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
 
       const { data, error } = result;
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data) {
-        // Construct the link using the current origin
         const origin = window.location.origin + window.location.pathname;
         const cleanOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
         const link = `${cleanOrigin}/#portal/${data.id}`;
@@ -123,7 +195,6 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
     window.location.hash = '';
   };
 
-  // Helper to ensure links inside iframe open in new tab and don't break parent routing
   const getPreviewHtml = () => {
     const baseTag = '<base target="_blank" />';
     if (htmlContent.match(/<head>/i)) {
@@ -147,7 +218,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+        <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-4">
              <Button variant="ghost" onClick={goBack} className="!p-2">
                 ← Back
@@ -176,56 +247,132 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
             {/* Form & Editor */}
             <div className="flex-1 flex flex-col p-6 overflow-y-auto">
                 
-                {/* Configuration Panel */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-6 bg-slate-900 rounded-xl border border-slate-800">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">Client Name</label>
-                        <input 
-                            type="text" 
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                            placeholder="e.g. Acme Corp"
-                            value={clientName}
-                            onChange={e => setClientName(e.target.value)}
-                        />
+                {/* 1. Client & Brand Info */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div className="p-6 bg-slate-900 rounded-xl border border-slate-800">
+                        <h3 className="text-lg font-semibold text-white mb-4">1. Client Details</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Client Name</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    placeholder="e.g. Acme Corp"
+                                    value={clientName}
+                                    onChange={e => setClientName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Website URL (for Brand Analysis)</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="url" 
+                                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="https://example.com"
+                                        value={websiteUrl}
+                                        onChange={e => setWebsiteUrl(e.target.value)}
+                                    />
+                                    <Button onClick={handleAnalyzeWebsite} isLoading={isAnalyzing} variant="secondary">
+                                        {isAnalyzing ? 'Scanning...' : 'Analyze'}
+                                    </Button>
+                                </div>
+                            </div>
+                            {brandData && (
+                                <div className="bg-slate-950 p-3 rounded border border-slate-800 text-xs text-slate-400">
+                                    <p><strong>Tone:</strong> {brandData.tone}</p>
+                                    <p><strong>Layout:</strong> {brandData.layoutStyle}</p>
+                                    <div className="flex gap-1 mt-1">
+                                        {brandData.colors.map(c => (
+                                            <span key={c} className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: c }} title={c} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">Access Password</label>
-                        <input 
-                            type="text" 
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                            placeholder="Secret123"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">
-                            {editingId ? 'Extend/Reset Access Duration' : 'Access Duration'}
-                        </label>
-                        <select 
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={expiration}
-                            onChange={e => setExpiration(Number(e.target.value))}
-                        >
-                            {EXPIRATION_OPTIONS.map(opt => (
-                                <option key={opt.label} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+
+                    <div className="p-6 bg-slate-900 rounded-xl border border-slate-800 flex flex-col">
+                        <h3 className="text-lg font-semibold text-white mb-4">2. Context & Structure</h3>
+                        <div className="flex-1 flex flex-col gap-4">
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Context / Transcription</label>
+                                <textarea 
+                                    className="w-full h-32 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm"
+                                    placeholder="Paste interview notes, meeting transcription, or client brief here..."
+                                    value={contextText}
+                                    onChange={e => setContextText(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-medium text-slate-400">Portal Sections</label>
+                                    <button onClick={handleAddSection} className="text-xs text-blue-400 hover:text-blue-300">+ Add Section</button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {sections.map(section => (
+                                        <div key={section.id} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs flex items-center gap-2">
+                                            <span>{section.title}</span>
+                                            {section.isRemovable && (
+                                                <button onClick={() => handleRemoveSection(section.id)} className="text-slate-500 hover:text-red-400">×</button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Editor Area */}
-                <div className="flex-1 flex flex-col min-h-[400px]">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm font-medium text-slate-400">HTML Source Code</label>
-                        <span className="text-xs text-slate-500">Edit directly or use AI to generate</span>
+                {/* Action Bar */}
+                <div className="flex justify-center mb-6">
+                    <Button 
+                        onClick={handleGeneratePortal} 
+                        isLoading={isGenerating} 
+                        className="w-full max-w-md py-3 text-lg shadow-lg shadow-blue-900/20"
+                    >
+                        ✨ Generate Portal from Scratch
+                    </Button>
+                </div>
+
+                {/* 3. Security & Editor */}
+                <div className="flex-1 flex flex-col min-h-[500px] bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-800 flex gap-6 bg-slate-900/50">
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Access Password</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white outline-none"
+                                placeholder="Secret123"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Duration</label>
+                            <select 
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white outline-none"
+                                value={expiration}
+                                onChange={e => setExpiration(Number(e.target.value))}
+                            >
+                                {EXPIRATION_OPTIONS.map(opt => (
+                                    <option key={opt.label} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
-                    <textarea 
-                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-sm text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed"
-                        value={htmlContent}
-                        onChange={e => setHtmlContent(e.target.value)}
-                        spellCheck={false}
-                    />
+                    
+                    <div className="flex-1 flex flex-col p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-medium text-slate-400">HTML Source Code</label>
+                            <span className="text-xs text-slate-500">Generated code appears here</span>
+                        </div>
+                        <textarea 
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-sm text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed"
+                            value={htmlContent}
+                            onChange={e => setHtmlContent(e.target.value)}
+                            spellCheck={false}
+                        />
+                    </div>
                 </div>
 
                 {/* Preview Modal Overlay */}

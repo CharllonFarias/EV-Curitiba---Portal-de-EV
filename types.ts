@@ -1,6 +1,23 @@
+export interface BrandData {
+  colors: string[];
+  fonts: string[];
+  tone: string;
+  layoutStyle: string;
+}
+
+export interface PortalSection {
+  id: string;
+  title: string;
+  description: string;
+  isRemovable: boolean;
+}
+
 export interface PortalData {
   id?: string; // Added for editing support
   clientName: string;
+  websiteUrl?: string;
+  contextText?: string;
+  sections?: PortalSection[];
   htmlContent: string;
   password: string; // In a real app, this should be hashed, but for this demo URL-state app, we store raw
   expiresAt: number;

@@ -6,6 +6,10 @@ create table public.portals (
   html_content text not null,
   password text not null,
   expires_at bigint not null,
+  website_url text,
+  context_text text,
+  sections jsonb,
+  brand_data jsonb,
   constraint portals_pkey primary key (id)
 ) tablespace pg_default;
 

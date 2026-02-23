@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { AspectRatio } from "../types";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { AspectRatio, BrandData, PortalSection } from "../types";
 
 // Helper to ensure API Key is present
 const getAIClient = () => {
@@ -18,6 +18,100 @@ const getAIClient = () => {
     throw new Error("API Key is missing. Please check index.html and paste your key in the window.process configuration.");
   }
   return new GoogleGenAI({ apiKey });
+};
+
+// 6. Analyze Brand from URL
+export const analyzeBrand = async (url: string): Promise<BrandData> => {
+  const ai = getAIClient();
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-latest',
+      contents: `Analyze the visual identity and brand voice of the website: ${url}. 
+      Extract the following:
+      1. Primary and secondary colors (hex codes).
+      2. Font families used (or similar Google Fonts).
+      3. Tone of voice (e.g., professional, playful, corporate).
+      4. Layout style (e.g., minimalist, brutalist, corporate).
+      
+      Return ONLY a JSON object.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            colors: { type: Type.ARRAY, items: { type: Type.STRING } },
+            fonts: { type: Type.ARRAY, items: { type: Type.STRING } },
+            tone: { type: Type.STRING },
+            layoutStyle: { type: Type.STRING }
+          },
+          required: ["colors", "fonts", "tone", "layoutStyle"]
+        } as any
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No analysis generated.");
+    return JSON.parse(text) as BrandData;
+  } catch (error) {
+    console.error("Brand Analysis Error:", error);
+    // Fallback if analysis fails
+    return {
+      colors: ["#0f172a", "#3b82f6"],
+      fonts: ["Inter", "sans-serif"],
+      tone: "Professional",
+      layoutStyle: "Clean and Modern"
+    };
+  }
+};
+
+// 7. Generate Portal HTML
+export const generatePortalHtml = async (
+  clientName: string,
+  brand: BrandData, 
+  context: string, 
+  sections: PortalSection[]
+): Promise<string> => {
+  const ai = getAIClient();
+  
+  const prompt = `
+    Create a complete, single-file HTML portal for a client named "${clientName}".
+    
+    BRAND GUIDELINES:
+    - Colors: ${brand.colors.join(', ')}
+    - Fonts: ${brand.fonts.join(', ')}
+    - Tone: ${brand.tone}
+    - Layout: ${brand.layoutStyle}
+
+    CONTEXT/CONTENT:
+    ${context}
+
+    REQUIRED SECTIONS (Create these sections in order):
+    ${sections.map(s => `- ${s.title}: ${s.description}`).join('\n')}
+
+    TECHNICAL REQUIREMENTS:
+    - Use Tailwind CSS via CDN (already included in the environment, just use classes).
+    - Use Google Fonts if needed (import them).
+    - The design should be high-quality, responsive, and match the brand style.
+    - Do NOT use external JS/CSS files other than Tailwind and Fonts.
+    - Use https://picsum.photos for placeholders if images are needed (add referrerPolicy="no-referrer").
+    - Return ONLY the HTML code, starting with <!DOCTYPE html>.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-pro-preview', // Better for coding
+      contents: prompt,
+    });
+
+    let html = response.text || "";
+    // Clean up markdown code blocks if present
+    html = html.replace(/```html/g, '').replace(/```/g, '');
+    return html;
+  } catch (error) {
+    console.error("Portal Generation Error:", error);
+    throw error;
+  }
 };
 
 // 1. Fast AI Responses (Gemini 2.5 Flash Lite)
