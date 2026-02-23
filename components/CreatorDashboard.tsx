@@ -34,10 +34,6 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
           setClientName(data.client_name);
           setPassword(data.password);
           setHtmlContent(data.html_content);
-          // Calculate remaining time essentially by checking diff, 
-          // but for simplicity in UI, we default selection to 1 Day or keep logic simple.
-          // Ideally, we might want to let them ADD time, but here we just reset logic or keep current.
-          // For now, we won't override the dropdown default unless we want to do complex math.
         }
         setIsLoadingData(false);
       };
@@ -125,6 +121,15 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
 
   const goBack = () => {
     window.location.hash = '';
+  };
+
+  // Helper to ensure links inside iframe open in new tab and don't break parent routing
+  const getPreviewHtml = () => {
+    const baseTag = '<base target="_blank" />';
+    if (htmlContent.match(/<head>/i)) {
+      return htmlContent.replace(/<head>/i, `<head>${baseTag}`);
+    }
+    return `${baseTag}${htmlContent}`;
   };
 
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -238,7 +243,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ editingId })
                         <div className="flex-1 bg-white relative">
                             <iframe 
                                 title="Page Preview"
-                                srcDoc={htmlContent}
+                                srcDoc={getPreviewHtml()}
                                 className="w-full h-full border-none absolute inset-0"
                                 sandbox="allow-scripts allow-popups allow-forms"
                             />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PortalData } from '../types';
 import { Button } from './Button';
 import { supabase } from '../services/supabaseClient';
@@ -55,6 +55,18 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
       fetchPortal();
     }
   }, [portalId]);
+
+  // Inject <base target="_blank"> to prevent links from hijacking the parent window navigation
+  const safeHtmlContent = useMemo(() => {
+    if (!data?.htmlContent) return '';
+    const baseTag = '<base target="_blank" />';
+    
+    // If <head> exists, inject inside it. Otherwise, prepend to string (browser handles it).
+    if (data.htmlContent.match(/<head>/i)) {
+      return data.htmlContent.replace(/<head>/i, `<head>${baseTag}`);
+    }
+    return `${baseTag}${data.htmlContent}`;
+  }, [data?.htmlContent]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,7 +160,7 @@ export const Viewer: React.FC<ViewerProps> = ({ portalId }) => {
       */}
       <iframe
         title="Secure Content"
-        srcDoc={data?.htmlContent}
+        srcDoc={safeHtmlContent}
         className="w-full h-full border-none block"
         sandbox="allow-scripts allow-popups allow-forms allow-same-origin allow-modals"
       />
